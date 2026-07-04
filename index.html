@@ -268,8 +268,8 @@
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
             try {
-                // バグ修正：URLを完全に正しい記述（バッククォートと $ マーク）へ変更
-                const res = await fetch(`https://openbd.jp{isbn}`);
+                // 特殊な記号（`や$）を一切使わず、普通の文字と「＋」でURLを繋ぐシンプルな書き方に変更
+                const res = await fetch("https://openbd.jp" + isbn);
                 const data = await res.json();
                 
                 if (data && data[0]) {

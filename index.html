@@ -252,12 +252,13 @@
             }
         }
 
-        // 最もシンプルで確実に動く「足し算」形式の自動検索処理
+        // 【完全修正版】URLの文字列抜けバグを解消した通信処理
         async function fetchBookInfo(isbn) {
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
             try {
-                const res = await fetch("https://openbd.jp" + isbn);
+                // 正しい宛先URL（/v1/get?isbn=）を完全に固定して結合
+                const res = await fetch("https://api.openbd.jp/v1/get?isbn=" + isbn);
                 const data = await res.json();
                 
                 if (data && data[0]) {

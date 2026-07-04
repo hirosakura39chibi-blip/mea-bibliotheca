@@ -268,24 +268,26 @@
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
             try {
-                // 正しいURL形式と変数展開に修正
-                const res = await fetch(`https://googleapis.com{isbn}`);
+                // 日本の本に強く、エラーが起きにくい「openBD API」に変更
+                const res = await fetch(`https://openbd.jp{isbn}`);
                 const data = await res.json();
-                if (data.totalItems > 0) {
-                    const info = data.items[0].volumeInfo;
+                
+                if (data && data[0]) {
+                    const info = data[0].summary;
                     titleInput.value = info.title || "";
-                    document.getElementById('author').value = info.authors ? info.authors.join(', ') : "";
-                    document.getElementById('translator').value = info.translator ? info.translator.join(', ') : "";
-                    scannedCoverUrl = info.imageLinks ? info.imageLinks.thumbnail.replace("http://", "https://") : "";
+                    document.getElementById('author').value = info.author || "";
+                    document.getElementById('translator').value = ""; // openBDの簡易データでは空欄にします
+                    scannedCoverUrl = info.cover || "";
                 } else {
                     titleInput.value = "";
-                    alert("Google Booksに書籍データが見つかりませんでした。");
+                    alert("書籍データが見つかりませんでした。手動で入力してください。");
                 }
             } catch (err) {
                 titleInput.value = "";
-                alert("データの取得に失敗しました。");
+                alert("データの取得に失敗しました。手動で入力してください。");
             }
         }
+
         function toggleScanner() { if (isScanning) { stopScanner(); } else { startScanner(); } }
         
         function startScanner() {

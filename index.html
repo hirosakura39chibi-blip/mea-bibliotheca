@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mea Bibliotheca</title>
+    <!-- カメラでのバーコード読み取り用ライブラリ -->
+    <script src="https://cloudflare.com"></script>
+    <style>
+        :root {
+            --primary: #4A5568;
+            --bg: #F7FAFC;
+            --card: #FFFFFF;
+            --text: #2D3748;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 16px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1 { font-size: 1.5rem; margin: 0; }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .search-bar {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #CBD5E0;
+            box-sizing: border-box;
+            margin-bottom: 16px;
+            font-size: 1rem;
+        }
+        .data-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .data-actions button {
+            background-color: #718096;
+            font-size: 0.85rem;
+            padding: 6px 12px;
+        }
+        .book-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 16px;
+        }
+        .book-card {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+            position: relative;
+        }
+        .book-cover {
+            width: 100px;
+            height: 140px;
+            object-fit: cover;
+            background-color: #E2E8F0;
+            margin: 0 auto 8px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: #A0AEC0;
+        }
+        .book-title {
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .book-author {
+            font-size: 0.8rem;
+            color: #718096;
+        }
+        .badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+        }
+        .badge.read { background-color: #48BB78; }
+        .badge.unread { background-color: #ED8936; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: var(--card);
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-weight: bold; font-size: 0.9rem; margin-bottom: 6px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 10px; border: 1px solid #CBD5E0; border-radius: 6px; box-sizing: border-box; font-size: 1rem;
+        }
+        .radio-group { display: flex; gap: 8px; }
+        .radio-btn { flex: 1; text-align: center; padding: 10px; border: 1px solid #CBD5E0; border-radius: 6px; cursor: pointer; font-weight: bold; background: #EDF2F7; }
+        .radio-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        #interactive { width: 100%; height: 200px; background: #000; border-radius: 8px; overflow: hidden; display: none; margin-bottom: 12px; position: relative; }
+        #interactive video { width: 100%; height: 100%; object-fit: cover; }
+        .modal-actions { display: flex; gap: 12px; margin-top: 20px; }
+        .modal-actions button { flex: 1; }
+        .btn-cancel { background-color: #E2E8F0; color: var(--text); }
+        .btn-scan { background-color: #3182CE; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📚 Mea Bibliotheca</h1>
+        <button onclick="openModal()">＋ 本を登録</button>
+    </header>
+
+    <input type="text" class="search-bar" id="search" placeholder="タイトルや著者で本棚を検索..." oninput="renderBooks()">
+    
+    <div class="data-actions">
+        <button onclick="exportToCSV()">📤 CSV書き出し</button>
+        <button onclick="document.getElementById('csvFile').click()">📥 CSV読み込み</button>
+        <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="importFromCSV(this)">
+    </div>
+
+    <div class="book-list" id="bookList"></div>
+
+    <div class="modal" id="bookModal">
+        <div class="modal-content">
+            <h2 style="margin-top:0; font-size:1.3rem;">本の登録</h2>
+            <div id="interactive"></div>
+            <div class="form-group" style="display: flex; gap: 8px;">
+                <input type="text" id="isbn" placeholder="バーコード数字（13桁）">
+                <button type="button" class="btn-scan" id="scanBtn" onclick="toggleScanner()">📷 スキャン</button>
+            </div>
+            <div class="form-group">
+                <label>タイトル *</label>
+                <input type="text" id="title" required placeholder="バーコードから自動入力、または手入力">
+            </div>
+            <div class="form-group">
+                <label>著者</label>
+                <input type="text" id="author">
+            </div>
+            <div class="form-group">
+                <label>訳者</label>
+                <input type="text" id="translator">
+            </div>
+            <div class="form-group">
+                <label>所有区分</label>
+                <div class="radio-group" id="ownerGroup">
+                    <div class="radio-btn active" onclick="setRadio('owner', '購入')">購入</div>
+                    <div class="radio-btn" onclick="setRadio('owner', '借用')">借用</div>
+                    <div class="radio-btn" onclick="setRadio('owner', '処分')">処分</div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>ステータス</label>
+                <div class="radio-group" id="statusGroup">
+                    <div class="radio-btn active" onclick="setRadio('status', '未読')">未読</div>
+                    <div class="radio-btn" onclick="setRadio('status', '既読')">既読</div>
+                </div>
+            </div>
+            <div class="form-group" id="readDateGroup" style="display: none;">
+                <label>読了日 (不明なら空欄OK)</label>
+                <input type="date" id="readDate">
+            </div>
+            <div class="form-group">
+                <label>メモ</label>
+                <textarea id="memo" rows="2"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+                <button onclick="saveBook()">保存する</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let db;
+        const request = indexedDB.open("BookShelfDB", 1);
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            db.createObjectStore("books", { keyPath: "id", autoIncrement: true });
+        };
+        request.onsuccess = (e) => { db = e.target.result; renderBooks(); };
+
+        let currentOwner = '購入';
+        let currentStatus = '未読';
+        let isScanning = false;
+        let scannedCoverUrl = "";
+
+        function openModal() { document.getElementById('bookModal').style.display = 'flex'; resetForm(); }
+        function closeModal() { document.getElementById('bookModal').style.display = 'none'; if (isScanning) stopScanner(); }
+
+        function resetForm() {
+            document.getElementById('isbn').value = '';
+            document.getElementById('title').value = '';
+            document.getElementById('author').value = '';
+            document.getElementById('translator').value = '';
+            document.getElementById('readDate').value = '';
+            document.getElementById('memo').value = '';
+            setRadio('owner', '購入');
+            setRadio('status', '未読');
+            scannedCoverUrl = "";
+            document.getElementById('isbn').oninput = function() {
+                if(this.value.length === 13) fetchBookInfo(this.value);
+            };
+        }
+
+        function setRadio(type, value) {
+            if (type === 'owner') {
+                currentOwner = value;
+                const btns = document.querySelectorAll('#ownerGroup .radio-btn');
+                btns.forEach(b => b.classList.toggle('active', b.innerText === value));
+            } else if (type === 'status') {
+                currentStatus = value;
+                const btns = document.querySelectorAll('#statusGroup .radio-btn');
+                btns.forEach(b => b.classList.toggle('active', b.innerText === value));
+                document.getElementById('readDateGroup').style.display = (value === '既読') ? 'block' : 'none';
+            }
+        }
+
+        async function fetchBookInfo(isbn) {
+            const titleInput = document.getElementById('title');
+            titleInput.value = "検索中...";
+            try {
+                const res = await fetch(`https://googleapis.com{isbn}`);
+                const data = await res.json();
+                if (data.totalItems > 0) {
+                    const info = data.items[0].volumeInfo;
+                    titleInput.value = info.title || "";
+                    document.getElementById('author').value = info.authors ? info.authors.join(', ') : "";
+                    document.getElementById('translator').value = info.translator ? info.translator.join(', ') : "";
+                    scannedCoverUrl = info.imageLinks ? info.imageLinks.thumbnail.replace("http://", "https://") : "";
+                } else {
+                    titleInput.value = "";
+                    alert("Google Booksに書籍データが見つかりませんでした。");
+                }
+            } catch (err) {
+                titleInput.value = "";
+                alert("データの取得に失敗しました。");
+            }
+        }
+        function toggleScanner() { if (isScanning) { stopScanner(); } else { startScanner(); } }
+        function startScanner() {
+            isScanning = true;
+            document.getElementById('interactive').style.display = 'block';
+            document.getElementById('scanBtn').innerText = "⏹ 停止";
+            Quagga.init({
+                inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#interactive') },
+                decoder: { readers: ["ean_reader"] }
+            }, function(err) {
+                if (err) { alert("カメラの起動に失敗しました"); stopScanner(); return; }
+                Quagga.start();
+            });
+            Quagga.onDetected((data) => {
+                const code = data.codeResult.code;
+                if (code.startsWith("978") || code.startsWith("979")) {
+                    document.getElementById('isbn').value = code;
+                    stopScanner();
+                    fetchBookInfo(code);
+                }
+            });
+        }
+        function stopScanner() {
+            isScanning = false;
+            Quagga.stop();
+            document.getElementById('interactive').style.display = 'none';
+            document.getElementById('scanBtn').innerText = "📷 スキャン";
+        }
+
+        function saveBook() {
+            const title = document.getElementById('title').value.trim();
+            if (!title || title === "検索中...") { alert("タイトルは必須です"); return; }
+            const book = {
+                isbn: document.getElementById('isbn').value,
+                title: title,
+                author: document.getElementById('author').value,
+                translator: document.getElementById('translator').value,
+                cover: scannedCoverUrl,
+                owner: currentOwner,
+                status: currentStatus,
+                readDate: currentStatus === '既読' ? document.getElementById('readDate').value : '',
+                memo: document.getElementById('memo').value
+            };
+            const tx = db.transaction("books", "readwrite");
+            tx.objectStore("books").add(book);
+            tx.oncomplete = () => { closeModal(); renderBooks(); };
+        }
+
+        function renderBooks() {
+            const list = document.getElementById('bookList');
+            list.innerHTML = '';
+            const query = document.getElementById('search').value.toLowerCase();
+            const tx = db.transaction("books", "readonly");
+            tx.objectStore("books").openCursor().onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const book = cursor.value;
+                    if (book.title.toLowerCase().includes(query) || (book.author && book.author.toLowerCase().includes(query))) {
+                        const card = document.createElement('div');
+                        card.className = 'book-card';
+                        const badgeClass = book.status === '既読' ? 'read' : 'unread';
+                        const coverHtml = book.cover ? `<img src="${book.cover}" class="book-cover">` : `<div class="book-cover">No Image</div>`;
+                        card.innerHTML = `
+                            <span class="badge ${badgeClass}">${book.status}</span>
+                            ${coverHtml}
+                            <div class="book-title">${book.title}</div>
+                            <div class="book-author">${book.author || '不明'}</div>
+                        `;
+                        list.appendChild(card);
+                    }
+                    cursor.continue();
+                }
+            };
+        }
+
+        function exportToCSV() {
+            const tx = db.transaction("books", "readonly");
+            const allBooks = [];
+            tx.objectStore("books").openCursor().onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) { allBooks.push(cursor.value); cursor.continue(); }
+                else {
+                    if(allBooks.length === 0) { alert("データがありません"); return; }
+                    let csvContent = "\uFEFF" + "バーコード,タイトル,著者,訳者,表紙画像,所有区分,ステータス,読了日,メモ\n";
+                    allBooks.forEach(b => {
+                        const row = [b.isbn, b.title, b.author, b.translator, b.cover, b.owner, b.status, b.readDate, b.memo]
+                                    .map(v => `"${(v || '').replace(/"/g, '""')}"`).join(",");
+                        csvContent += row + "\n";
+                    });
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.setAttribute("download", "mea_bibliotheca_backup.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            };
+        }
+
+        function importFromCSV(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+                if(lines.length <= 1) return;
+                const tx = db.transaction("books", "readwrite");
+                const store = tx.objectStore("books");
+                for (let i = 1; i < lines.length; i++) {
+                    const matches = lines[i].match(/(".*?"|[^,\s]+)(?=\s*,|\s*$)/g) || [];
+                    const row = matches.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
+                    if (row.length >= 2) {
+                        store.add({
+                            isbn: row[0] || "", title: row[1] || "", author: row[2] || "",
+                            translator: row[3] || "", cover: row[4] || "", owner: row[5] || "購入",
+                            status: row[6] || "未読", readDate: row[7] || "", memo: row[8] || ""
+                        });
+                    }
+                }
+                tx.oncomplete = () => { alert("データの復元が完了しました！"); renderBooks(); input.value = ''; };
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>

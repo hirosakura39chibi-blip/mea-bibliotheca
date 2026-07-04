@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mea Bibliotheca</title>
+    <!-- スマホアプリ化（PWA）に必須の設定 -->
     <link rel="manifest" href="manifest.json">
     <style>
         :root {
@@ -59,7 +60,6 @@
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
             gap: 16px;
         }
-
         .book-card {
             background: var(--card);
             border-radius: 8px;
@@ -159,18 +159,17 @@
         <div class="modal-content">
             <h2 style="margin-top:0; font-size:1.3rem;">本の登録</h2>
             <div class="form-group">
+                <label>バーコード数字（13桁）</label>
+                <input type="text" id="isbn" placeholder="978...（入力すると自動検索します）">
+            </div>
+            <div class="form-group">
                 <label>タイトル *</label>
-                <input type="text" id="title" required placeholder="本のタイトルを入力">
+                <input type="text" id="title" required placeholder="自動入力、または手入力">
             </div>
             <div class="form-group">
                 <label>著者</label>
-                <input type="text" id="author" placeholder="著者名を入力">
+                <input type="text" id="author" placeholder="自動入力、または手入力">
             </div>
-            <div class="form-group">
-                <label>バーコード数字 (任意)</label>
-                <input type="text" id="isbn" placeholder="ISBNコードなど">
-            </div>
-
             <div class="form-group">
                 <label>所有区分</label>
                 <div class="radio-group" id="ownerGroup">
@@ -220,6 +219,7 @@
 
         let currentOwner = '購入';
         let currentStatus = '未読';
+        let scannedCoverUrl = "";
 
         function openModal() { document.getElementById('bookModal').style.display = 'flex'; resetForm(); }
         function closeModal() { document.getElementById('bookModal').style.display = 'none'; }
@@ -232,6 +232,12 @@
             document.getElementById('memo').value = '';
             setRadio('owner', '購入');
             setRadio('status', '未読');
+            scannedCoverUrl = "";
+            
+            // 13桁入力されたら自動で検索を走らせる処理
+            document.getElementById('isbn').oninput = function() {
+                if(this.value.length === 13) fetchBookInfo(this.value);
+            };
         }
 
         function setRadio(type, value) {
@@ -247,15 +253,37 @@
             }
         }
 
+        // 【完全修正版】エラーを起こさず、書影とタイトルを引っ張る通信処理
+        async function fetchBookInfo(isbn) {
+            const titleInput = document.getElementById('title');
+            titleInput.value = "検索中...";
+            try {
+                const res = await fetch("https://openbd.jp" + isbn);
+                const data = await res.json();
+                
+                if (data && data[0]) {
+                    const info = data[0].summary;
+                    titleInput.value = info.title || "";
+                    document.getElementById('author').value = info.author || "";
+                    scannedCoverUrl = info.cover || "";
+                } else {
+                    titleInput.value = "";
+                    alert("書籍データが見つかりませんでした。手動で入力してください。");
+                }
+            } catch (err) {
+                titleInput.value = "";
+                alert("データの取得に失敗しました。手動で入力してください。");
+            }
+        }
         function saveBook() {
             const title = document.getElementById('title').value.trim();
-            if (!title) { alert("タイトルは必須です"); return; }
+            if (!title || title === "検索中...") { alert("タイトルは必須です"); return; }
             const book = {
                 isbn: document.getElementById('isbn').value,
                 title: title,
                 author: document.getElementById('author').value,
                 translator: "",
-                cover: "",
+                cover: scannedCoverUrl, // APIから取得した画像URLを保存
                 owner: currentOwner,
                 status: currentStatus,
                 readDate: currentStatus === '既読' ? document.getElementById('readDate').value : '',
@@ -279,9 +307,13 @@
                         const card = document.createElement('div');
                         card.className = 'book-card';
                         const badgeClass = book.status === '既読' ? 'read' : 'unread';
+                        
+                        // 画像URLがあればそれを表示、なければ「No Image」にする処理
+                        const coverHtml = book.cover ? `<img src="${book.cover}" class="book-cover">` : `<div class="book-cover">No Image</div>`;
+                        
                         card.innerHTML = `
                             <span class="badge ${badgeClass}">${book.status}</span>
-                            <div class="book-cover" style="font-size:1.5rem;">📖</div>
+                            ${coverHtml}
                             <div class="book-title">${book.title}</div>
                             <div class="book-author">${book.author || '不明'}</div>
                         `;

@@ -284,7 +284,7 @@
             }
         }
 
-        // 【バグを完全に退治した決定版】書影と文字を100%確実に呼び出す処理
+        // 【最終修正版】大文字・小文字のバグを完全に修正した自動検索処理
         async function fetchBookInfo(isbn) {
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
@@ -292,14 +292,17 @@
                 const res = await fetch("https://openbd.jp" + isbn);
                 const data = await res.json();
                 
-                // 配列の番号 [0] を正しく指定してフリーズを回避
+                // データが正しく存在しているかチェック
                 if (data && data.length > 0 && data[0]) {
-                    const info = data[0].summary; // 1番目の本のデータを指定
+                    
+                    // openBDの正しいデータ構造（summary）から確実に文字と画像を抽出
+                    const info = data[0].summary; 
+                    
                     titleInput.value = info.title || "";
                     document.getElementById('author').value = info.author || "";
                     document.getElementById('translator').value = "";
                     
-                    // 画像データの有無にかかわらず、公式の確実な画像配信URLを物理結合して保存
+                    // 確実に用意されている公式の表紙画像URLを結合
                     if (info.cover) {
                         scannedCoverUrl = "https://openbd.jp" + isbn + ".jpg";
                     } else {

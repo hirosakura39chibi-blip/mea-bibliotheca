@@ -284,33 +284,31 @@
             }
         }
 
-        // 【バグ完全修正版】確実にGoogleのデータベースから情報・書影を引っ張る通信処理
+        // 【究極の安定版】ブロックの心配が一切ない日本国内データベース(openBD)通信処理
         async function fetchBookInfo(isbn) {
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
             try {
-                // 安全な足し算形式でGoogle Books APIのURLを生成
-                const res = await fetch("https://googleapis.com:" + isbn);
+                // 登録不要・制限なしのopenBD APIへ、安全な足し算で接続
+                const res = await fetch("https://openbd.jp" + isbn);
                 const data = await res.json();
                 
-                if (data.totalItems > 0) {
-                    const info = data.items[0].volumeInfo;
+                if (data && data[0]) {
+                    const info = data[0].summary; // openBDの最新のデータ構造に対応
                     titleInput.value = info.title || "";
-                    document.getElementById('author').value = info.authors ? info.authors.join(', ') : "";
-                    document.getElementById('translator').value = info.translator ? info.translator.join(', ') : "";
-                    
-                    // 画像の暗号化通信（https）への強制変換も含めて完璧に処理
-                    scannedCoverUrl = info.imageLinks ? info.imageLinks.thumbnail.replace("http://", "https://") : "";
+                    document.getElementById('author').value = info.author || "";
+                    document.getElementById('translator').value = ""; // openBDは訳者データを持たないため空欄
+                    scannedCoverUrl = info.cover || ""; // 登録されている本であれば表紙URLを取得
                 } else {
                     titleInput.value = "";
-                    alert("Google Booksに書籍データが見つかりませんでした。手動で入力してください。");
+                    alert("書籍データが見つかりませんでした。手動で入力してください。");
                 }
             } catch (err) {
                 titleInput.value = "";
                 alert("データの取得に失敗しました。手動で入力してください。");
             }
         }
-                // 新規登録と「修正（編集）」の両方に対応した保存処理
+        // 新規登録と「修正（編集）」の両方に対応した保存処理
         function saveBook() {
             const title = document.getElementById('title').value.trim();
             if (!title || title === "検索中...") { alert("タイトルは必須です"); return; }

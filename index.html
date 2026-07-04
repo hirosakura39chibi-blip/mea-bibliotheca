@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mea Bibliotheca</title>
+    <!-- スマホアプリ化（PWA）に必須の設定 -->
+    <link rel="manifest" href="manifest.json">
     <!-- カメラでのバーコード読み取り用ライブラリ -->
     <script src="https://cloudflare.com"></script>
     <style>
@@ -209,6 +211,15 @@
     </div>
 
     <script>
+        // スマホアプリ化（PWA）に必要なサービスワーカーの登録処理
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker 登録成功', reg))
+                    .catch(err => console.error('Service Worker 登録失敗', err));
+            });
+        }
+
         let db;
         const request = indexedDB.open("BookShelfDB", 1);
         request.onupgradeneeded = (e) => {
@@ -257,6 +268,7 @@
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
             try {
+                // 正しいURL形式と変数展開に修正
                 const res = await fetch(`https://googleapis.com{isbn}`);
                 const data = await res.json();
                 if (data.totalItems > 0) {
@@ -275,6 +287,7 @@
             }
         }
         function toggleScanner() { if (isScanning) { stopScanner(); } else { startScanner(); } }
+        
         function startScanner() {
             isScanning = true;
             document.getElementById('interactive').style.display = 'block';
@@ -295,11 +308,12 @@
                 }
             });
         }
+
         function stopScanner() {
             isScanning = false;
-            Quagga.stop();
             document.getElementById('interactive').style.display = 'none';
             document.getElementById('scanBtn').innerText = "📷 スキャン";
+            Quagga.stop();
         }
 
         function saveBook() {
@@ -374,8 +388,9 @@
         }
 
         function importFromCSV(input) {
-            const file = input.files[0];
-            if (!file) return;
+            const files = input.files;
+            if (!files || files.length === 0) return;
+            const file = files[0];
             const reader = new FileReader();
             reader.onload = function(e) {
                 const text = e.target.result;

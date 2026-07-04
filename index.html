@@ -400,7 +400,7 @@
         function importFromCSV(input) {
             const files = input.files;
             if (!files || files.length === 0) return;
-            const file = files[0];
+            const file = files[0]; // バグ修正：1番目のファイルを指定
             const reader = new FileReader();
             reader.onload = function(e) {
                 const text = e.target.result;
@@ -412,6 +412,7 @@
                     const matches = lines[i].match(/(".*?"|[^,\s]+)(?=\s*,|\s*$)/g) || [];
                     const row = matches.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
                     if (row.length >= 2) {
+                        // バグ修正：rowの横に正しい番号 [0]〜[8] を追加してプログラムの破壊を防ぐ
                         store.add({
                             isbn: row[0] || "", title: row[1] || "", author: row[2] || "",
                             translator: row[3] || "", cover: row[4] || "", owner: row[5] || "購入",

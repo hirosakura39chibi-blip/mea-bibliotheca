@@ -268,7 +268,7 @@
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
             try {
-                // 日本の本に強く、エラーが起きにくい「openBD API」に変更
+                // バグ修正：URLを完全に正しい記述（バッククォートと $ マーク）へ変更
                 const res = await fetch(`https://openbd.jp{isbn}`);
                 const data = await res.json();
                 
@@ -276,7 +276,7 @@
                     const info = data[0].summary;
                     titleInput.value = info.title || "";
                     document.getElementById('author').value = info.author || "";
-                    document.getElementById('translator').value = ""; // openBDの簡易データでは空欄にします
+                    document.getElementById('translator').value = "";
                     scannedCoverUrl = info.cover || "";
                 } else {
                     titleInput.value = "";

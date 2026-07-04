@@ -293,7 +293,15 @@
             document.getElementById('interactive').style.display = 'block';
             document.getElementById('scanBtn').innerText = "⏹ 停止";
             Quagga.init({
-                inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#interactive') },
+                inputStream: { 
+                    name: "Live", 
+                    type: "LiveStream", 
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        // Androidスマホの外側（背面）カメラを強制指定する設定を追加
+                        facingMode: "environment"
+                    }
+                },
                 decoder: { readers: ["ean_reader"] }
             }, function(err) {
                 if (err) { alert("カメラの起動に失敗しました"); stopScanner(); return; }

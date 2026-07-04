@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mea Bibliotheca</title>
-    <!-- スマホアプリ化（PWA）に必須の設定 -->
     <link rel="manifest" href="manifest.json">
-    <!-- カメラでのバーコード読み取り用ライブラリ -->
-    <script src="https://cloudflare.com"></script>
     <style>
         :root {
             --primary: #4A5568;
@@ -62,6 +59,7 @@
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
             gap: 16px;
         }
+
         .book-card {
             background: var(--card);
             border-radius: 8px;
@@ -136,12 +134,9 @@
         .radio-group { display: flex; gap: 8px; }
         .radio-btn { flex: 1; text-align: center; padding: 10px; border: 1px solid #CBD5E0; border-radius: 6px; cursor: pointer; font-weight: bold; background: #EDF2F7; }
         .radio-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-        #interactive { width: 100%; height: 200px; background: #000; border-radius: 8px; overflow: hidden; display: none; margin-bottom: 12px; position: relative; }
-        #interactive video { width: 100%; height: 100%; object-fit: cover; }
         .modal-actions { display: flex; gap: 12px; margin-top: 20px; }
         .modal-actions button { flex: 1; }
         .btn-cancel { background-color: #E2E8F0; color: var(--text); }
-        .btn-scan { background-color: #3182CE; }
     </style>
 </head>
 <body>
@@ -163,23 +158,19 @@
     <div class="modal" id="bookModal">
         <div class="modal-content">
             <h2 style="margin-top:0; font-size:1.3rem;">本の登録</h2>
-            <div id="interactive"></div>
-            <div class="form-group" style="display: flex; gap: 8px;">
-                <input type="text" id="isbn" placeholder="バーコード数字（13桁）">
-                <button type="button" class="btn-scan" id="scanBtn" onclick="toggleScanner()">📷 スキャン</button>
-            </div>
             <div class="form-group">
                 <label>タイトル *</label>
-                <input type="text" id="title" required placeholder="バーコードから自動入力、または手入力">
+                <input type="text" id="title" required placeholder="本のタイトルを入力">
             </div>
             <div class="form-group">
                 <label>著者</label>
-                <input type="text" id="author">
+                <input type="text" id="author" placeholder="著者名を入力">
             </div>
             <div class="form-group">
-                <label>訳者</label>
-                <input type="text" id="translator">
+                <label>バーコード数字 (任意)</label>
+                <input type="text" id="isbn" placeholder="ISBNコードなど">
             </div>
+
             <div class="form-group">
                 <label>所有区分</label>
                 <div class="radio-group" id="ownerGroup">
@@ -196,12 +187,12 @@
                 </div>
             </div>
             <div class="form-group" id="readDateGroup" style="display: none;">
-                <label>読了日 (不明なら空欄OK)</label>
+                <label>読了日 (空欄OK)</label>
                 <input type="date" id="readDate">
             </div>
             <div class="form-group">
                 <label>メモ</label>
-                <textarea id="memo" rows="2"></textarea>
+                <textarea id="memo" rows="2" placeholder="感想やメモなど"></textarea>
             </div>
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
@@ -211,7 +202,6 @@
     </div>
 
     <script>
-        // スマホアプリ化（PWA）に必要なサービスワーカーの登録処理
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
@@ -230,25 +220,18 @@
 
         let currentOwner = '購入';
         let currentStatus = '未読';
-        let isScanning = false;
-        let scannedCoverUrl = "";
 
         function openModal() { document.getElementById('bookModal').style.display = 'flex'; resetForm(); }
-        function closeModal() { document.getElementById('bookModal').style.display = 'none'; if (isScanning) stopScanner(); }
+        function closeModal() { document.getElementById('bookModal').style.display = 'none'; }
 
         function resetForm() {
             document.getElementById('isbn').value = '';
             document.getElementById('title').value = '';
             document.getElementById('author').value = '';
-            document.getElementById('translator').value = '';
             document.getElementById('readDate').value = '';
             document.getElementById('memo').value = '';
             setRadio('owner', '購入');
             setRadio('status', '未読');
-            scannedCoverUrl = "";
-            document.getElementById('isbn').oninput = function() {
-                if(this.value.length === 13) fetchBookInfo(this.value);
-            };
         }
 
         function setRadio(type, value) {
@@ -264,77 +247,15 @@
             }
         }
 
-        async function fetchBookInfo(isbn) {
-            const titleInput = document.getElementById('title');
-            titleInput.value = "検索中...";
-            try {
-                // 特殊な記号（`や$）を一切使わず、普通の文字と「＋」でURLを繋ぐシンプルな書き方に変更
-                const res = await fetch("https://openbd.jp" + isbn);
-                const data = await res.json();
-                
-                if (data && data[0]) {
-                    const info = data[0].summary;
-                    titleInput.value = info.title || "";
-                    document.getElementById('author').value = info.author || "";
-                    document.getElementById('translator').value = "";
-                    scannedCoverUrl = info.cover || "";
-                } else {
-                    titleInput.value = "";
-                    alert("書籍データが見つかりませんでした。手動で入力してください。");
-                }
-            } catch (err) {
-                titleInput.value = "";
-                alert("データの取得に失敗しました。手動で入力してください。");
-            }
-        }
-
-        function toggleScanner() { if (isScanning) { stopScanner(); } else { startScanner(); } }
-        
-        function startScanner() {
-            isScanning = true;
-            document.getElementById('interactive').style.display = 'block';
-            document.getElementById('scanBtn').innerText = "⏹ 停止";
-            Quagga.init({
-                inputStream: { 
-                    name: "Live", 
-                    type: "LiveStream", 
-                    target: document.querySelector('#interactive'),
-                    constraints: {
-                        // Androidスマホの外側（背面）カメラを強制指定する設定を追加
-                        facingMode: "environment"
-                    }
-                },
-                decoder: { readers: ["ean_reader"] }
-            }, function(err) {
-                if (err) { alert("カメラの起動に失敗しました"); stopScanner(); return; }
-                Quagga.start();
-            });
-            Quagga.onDetected((data) => {
-                const code = data.codeResult.code;
-                if (code.startsWith("978") || code.startsWith("979")) {
-                    document.getElementById('isbn').value = code;
-                    stopScanner();
-                    fetchBookInfo(code);
-                }
-            });
-        }
-
-        function stopScanner() {
-            isScanning = false;
-            document.getElementById('interactive').style.display = 'none';
-            document.getElementById('scanBtn').innerText = "📷 スキャン";
-            Quagga.stop();
-        }
-
         function saveBook() {
             const title = document.getElementById('title').value.trim();
-            if (!title || title === "検索中...") { alert("タイトルは必須です"); return; }
+            if (!title) { alert("タイトルは必須です"); return; }
             const book = {
                 isbn: document.getElementById('isbn').value,
                 title: title,
                 author: document.getElementById('author').value,
-                translator: document.getElementById('translator').value,
-                cover: scannedCoverUrl,
+                translator: "",
+                cover: "",
                 owner: currentOwner,
                 status: currentStatus,
                 readDate: currentStatus === '既読' ? document.getElementById('readDate').value : '',
@@ -358,10 +279,9 @@
                         const card = document.createElement('div');
                         card.className = 'book-card';
                         const badgeClass = book.status === '既読' ? 'read' : 'unread';
-                        const coverHtml = book.cover ? `<img src="${book.cover}" class="book-cover">` : `<div class="book-cover">No Image</div>`;
                         card.innerHTML = `
                             <span class="badge ${badgeClass}">${book.status}</span>
-                            ${coverHtml}
+                            <div class="book-cover" style="font-size:1.5rem;">📖</div>
                             <div class="book-title">${book.title}</div>
                             <div class="book-author">${book.author || '不明'}</div>
                         `;
@@ -400,7 +320,7 @@
         function importFromCSV(input) {
             const files = input.files;
             if (!files || files.length === 0) return;
-            const file = files[0]; // バグ修正：1番目のファイルを指定
+            const file = files[0];
             const reader = new FileReader();
             reader.onload = function(e) {
                 const text = e.target.result;
@@ -412,7 +332,6 @@
                     const matches = lines[i].match(/(".*?"|[^,\s]+)(?=\s*,|\s*$)/g) || [];
                     const row = matches.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
                     if (row.length >= 2) {
-                        // バグ修正：rowの横に正しい番号 [0]〜[8] を追加してプログラムの破壊を防ぐ
                         store.add({
                             isbn: row[0] || "", title: row[1] || "", author: row[2] || "",
                             translator: row[3] || "", cover: row[4] || "", owner: row[5] || "購入",

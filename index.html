@@ -234,7 +234,6 @@
             setRadio('status', '未読');
             scannedCoverUrl = "";
             
-            // 13桁入力されたら自動で検索を走らせる処理
             document.getElementById('isbn').oninput = function() {
                 if(this.value.length === 13) fetchBookInfo(this.value);
             };
@@ -253,7 +252,7 @@
             }
         }
 
-        // 【完全修正版】エラーを起こさず、書影とタイトルを引っ張る通信処理
+        // 最もシンプルで確実に動く「足し算」形式の自動検索処理
         async function fetchBookInfo(isbn) {
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
@@ -283,7 +282,7 @@
                 title: title,
                 author: document.getElementById('author').value,
                 translator: "",
-                cover: scannedCoverUrl, // APIから取得した画像URLを保存
+                cover: scannedCoverUrl,
                 owner: currentOwner,
                 status: currentStatus,
                 readDate: currentStatus === '既読' ? document.getElementById('readDate').value : '',
@@ -308,7 +307,6 @@
                         card.className = 'book-card';
                         const badgeClass = book.status === '既読' ? 'read' : 'unread';
                         
-                        // 画像URLがあればそれを表示、なければ「No Image」にする処理
                         const coverHtml = book.cover ? `<img src="${book.cover}" class="book-cover">` : `<div class="book-cover">No Image</div>`;
                         
                         card.innerHTML = `

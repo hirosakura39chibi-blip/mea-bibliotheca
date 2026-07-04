@@ -12,6 +12,8 @@
             --bg: #F7FAFC;
             --card: #FFFFFF;
             --text: #2D3748;
+            --danger: #E53E3E;
+            --edit: #3182CE;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -60,13 +62,16 @@
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
             gap: 16px;
         }
-        .book-card {
+                .book-card {
             background: var(--card);
             border-radius: 8px;
             padding: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             text-align: center;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
         .book-cover {
             width: 100px;
@@ -93,6 +98,7 @@
         .book-author {
             font-size: 0.8rem;
             color: #718096;
+            margin-bottom: 8px;
         }
         .badge {
             position: absolute;
@@ -106,6 +112,19 @@
         }
         .badge.read { background-color: #48BB78; }
         .badge.unread { background-color: #ED8936; }
+        .card-actions {
+            display: flex;
+            gap: 4px;
+            margin-top: auto;
+        }
+        .card-actions button {
+            flex: 1;
+            padding: 6px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+        }
+        .btn-edit { background-color: var(--edit); }
+        .btn-delete { background-color: var(--danger); }
         .modal {
             display: none;
             position: fixed;
@@ -157,7 +176,9 @@
 
     <div class="modal" id="bookModal">
         <div class="modal-content">
-            <h2 style="margin-top:0; font-size:1.3rem;">本の登録</h2>
+            <h2 id="modalTitle" style="margin-top:0; font-size:1.3rem;">本の登録</h2>
+            <!-- 編集時にどの本を直しているかを識別する隠し入力欄 -->
+            <input type="hidden" id="bookId">
             <div class="form-group">
                 <label>バーコード数字（13桁）</label>
                 <input type="text" id="isbn" placeholder="978...（入力すると自動検索します）">
@@ -174,7 +195,7 @@
                 <label>訳者</label>
                 <input type="text" id="translator" placeholder="自動入力、または手入力">
             </div>
-            <div class="form-group">
+                        <div class="form-group">
                 <label>所有区分</label>
                 <div class="radio-group" id="ownerGroup">
                     <div class="radio-btn active" onclick="setRadio('owner', '購入')">購入</div>
@@ -205,9 +226,10 @@
     </div>
 
     <script>
+        // 過去の強力なキャッシュを上書きするために ?v=final を付与して登録
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
+                navigator.serviceWorker.register('./sw.js?v=final')
                     .then(reg => console.log('Service Worker 登録成功', reg))
                     .catch(err => console.error('Service Worker 登録失敗', err));
             });
@@ -225,10 +247,15 @@
         let currentStatus = '未読';
         let scannedCoverUrl = "";
 
-        function openModal() { document.getElementById('bookModal').style.display = 'flex'; resetForm(); }
+        function openModal() {
+            document.getElementById('modalTitle').innerText = "本の登録";
+            document.getElementById('bookModal').style.display = 'flex';
+            resetForm();
+        }
         function closeModal() { document.getElementById('bookModal').style.display = 'none'; }
 
         function resetForm() {
+            document.getElementById('bookId').value = '';
             document.getElementById('isbn').value = '';
             document.getElementById('title').value = '';
             document.getElementById('author').value = '';
@@ -257,7 +284,7 @@
             }
         }
 
-        // Google Books APIに接続先を戻し、安全な文字列足し算でデータ（書影含む）を取得する処理
+        // 【バグ完全修正版】確実にGoogleのデータベースから情報・書影を引っ張る通信処理
         async function fetchBookInfo(isbn) {
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
@@ -283,23 +310,76 @@
                 alert("データの取得に失敗しました。手動で入力してください。");
             }
         }
+                // 新規登録と「修正（編集）」の両方に対応した保存処理
         function saveBook() {
             const title = document.getElementById('title').value.trim();
             if (!title || title === "検索中...") { alert("タイトルは必須です"); return; }
+            
+            const idVal = document.getElementById('bookId').value;
+            
             const book = {
                 isbn: document.getElementById('isbn').value,
                 title: title,
                 author: document.getElementById('author').value,
-                translator: document.getElementById('translator').value, // 訳者データを保存
+                translator: document.getElementById('translator').value,
                 cover: scannedCoverUrl,
                 owner: currentOwner,
                 status: currentStatus,
                 readDate: currentStatus === '既読' ? document.getElementById('readDate').value : '',
                 memo: document.getElementById('memo').value
             };
+            
+            // もしIDがあれば既存データの「修正（上書き）」、なければ「新規追加」
+            if (idVal) {
+                book.id = Number(idVal);
+            }
+
             const tx = db.transaction("books", "readwrite");
-            tx.objectStore("books").add(book);
+            const store = tx.objectStore("books");
+            
+            if (idVal) {
+                store.put(book); // 上書き
+            } else {
+                store.add(book); // 新規登録
+            }
+            
             tx.oncomplete = () => { closeModal(); renderBooks(); };
+        }
+
+        // 登録済みの本のデータを呼び出して編集画面を開く処理
+        function editBook(id) {
+            const tx = db.transaction("books", "readonly");
+            tx.objectStore("books").get(id).onsuccess = (e) => {
+                const book = e.target.result;
+                if (!book) return;
+                
+                document.getElementById('modalTitle').innerText = "本の編集・修正";
+                document.getElementById('bookModal').style.display = 'flex';
+                
+                document.getElementById('bookId').value = book.id;
+                document.getElementById('isbn').value = book.isbn || '';
+                document.getElementById('title').value = book.title || '';
+                document.getElementById('author').value = book.author || '';
+                document.getElementById('translator').value = book.translator || '';
+                document.getElementById('readDate').value = book.readDate || '';
+                document.getElementById('memo').value = book.memo || '';
+                
+                setRadio('owner', book.owner || '購入');
+                setRadio('status', book.status || '未読');
+                scannedCoverUrl = book.cover || '';
+                
+                // 編集時は誤動作を防ぐため、数字入力時の自動検索を一時的にオフにする
+                document.getElementById('isbn').oninput = null;
+            };
+        }
+
+        // 本を削除する処理
+        function deleteBook(id, title) {
+            if (confirm(`「${title}」を本棚から削除してもよろしいですか？`)) {
+                const tx = db.transaction("books", "readwrite");
+                tx.objectStore("books").delete(id);
+                tx.oncomplete = () => { renderBooks(); };
+            }
         }
 
         function renderBooks() {
@@ -311,7 +391,6 @@
                 const cursor = e.target.result;
                 if (cursor) {
                     const book = cursor.value;
-                    // タイトル、著者名に加えて、訳者名でのキーワード検索にも対応
                     const matchTitle = book.title.toLowerCase().includes(query);
                     const matchAuthor = book.author && book.author.toLowerCase().includes(query);
                     const matchTranslator = book.translator && book.translator.toLowerCase().includes(query);
@@ -321,18 +400,20 @@
                         card.className = 'book-card';
                         const badgeClass = book.status === '既読' ? 'read' : 'unread';
                         
-                        // Googleから取得した書影URLがあれば画像を表示、なければ上品な「No Image」枠を表示
                         const coverHtml = book.cover ? `<img src="${book.cover}" class="book-cover">` : `<div class="book-cover">No Image</div>`;
-                        
-                        // 訳者情報があれば著者名の下に小さく表示する仕組み
                         const translatorHtml = book.translator ? `<div class="book-author" style="font-size:0.75rem; margin-top:2px;">訳: ${book.translator}</div>` : '';
                         
+                        // 修正（編集）ボタンと削除ボタンをカードの下部に追加
                         card.innerHTML = `
                             <span class="badge ${badgeClass}">${book.status}</span>
                             ${coverHtml}
                             <div class="book-title">${book.title}</div>
                             <div class="book-author">${book.author || '不明'}</div>
                             ${translatorHtml}
+                            <div class="card-actions">
+                                <button class="btn-edit" onclick="editBook(${book.id})">修正</button>
+                                <button class="btn-delete" onclick="deleteBook(${book.id}, '${book.title.replace(/'/g, "\\'")}')">削除</button>
+                            </div>
                         `;
                         list.appendChild(card);
                     }

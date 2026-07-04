@@ -284,21 +284,21 @@
             }
         }
 
-        // 【究極の安定版】ブロックの心配が一切ない日本国内データベース(openBD)通信処理
+        // 【完全修正版】URLの結合バグを徹底的に排除した自動検索処理
         async function fetchBookInfo(isbn) {
             const titleInput = document.getElementById('title');
             titleInput.value = "検索中...";
             try {
-                // 登録不要・制限なしのopenBD APIへ、安全な足し算で接続
-                const res = await fetch("https://openbd.jp" + isbn);
+                // 正しい宛先URL（/v1/get?isbn=）を完全に固定して結合
+                const res = await fetch("https://api.openbd.jp/v1/get?isbn=" + isbn);
                 const data = await res.json();
                 
-                if (data && data[0]) {
-                    const info = data[0].summary; // openBDの最新のデータ構造に対応
+                if (data && data.length > 0 && data[0]) {
+                    const info = data[0].summary; // openBDのデータ構造に完全対応
                     titleInput.value = info.title || "";
                     document.getElementById('author').value = info.author || "";
-                    document.getElementById('translator').value = ""; // openBDは訳者データを持たないため空欄
-                    scannedCoverUrl = info.cover || ""; // 登録されている本であれば表紙URLを取得
+                    document.getElementById('translator').value = "";
+                    scannedCoverUrl = info.cover || "";
                 } else {
                     titleInput.value = "";
                     alert("書籍データが見つかりませんでした。手動で入力してください。");
@@ -308,6 +308,7 @@
                 alert("データの取得に失敗しました。手動で入力してください。");
             }
         }
+        
         // 新規登録と「修正（編集）」の両方に対応した保存処理
         function saveBook() {
             const title = document.getElementById('title').value.trim();
